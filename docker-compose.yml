@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - api
+
+  api:
+    build: .
+    # REMOVE the "ports: - "3000:3000"" line. Nginx will handle external traffic now.
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/todos
+      - PORT=3000
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:6-jammy
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
