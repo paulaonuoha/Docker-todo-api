@@ -1,0 +1,65 @@
+name: CI/CD Pipeline
+
+# 1. THE TRIGGER: When does this run?
+on:
+  push:
+    branches:
+      - main # It runs every time you push code to the 'main' branch
+
+# 2. THE JOBS: What steps does it take?
+jobs:
+  build-and-push:
+    name: Build Docker Image and Push to Hub
+    runs-on: ubuntu-latest # Run this job on a temporary Ubuntu Linux machine
+
+    steps:
+      # Step A: Get a copy of your code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step B: Log into Docker Hub using your secrets
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Step C: Build the image from your Dockerfile and push it
+      - name: Build and push API image
+        uses: docker/build-push-action@v4
+        with:
+          context: . # Look in the current directory for the Dockerfile
+          push: true # Actually upload it to Docker Hub
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/todo-api:latest # Name it "username/todo-api:latest"
+
+  deploy:
+    name: Deploy to Remote Server
+    needs: build-and-push # WAIT until the build job finishes successfully!
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step D: SSH into your server and run commands
+      - name: Execute commands via SSH
+        uses: appleboy/ssh-action@master # A pre-made script that handles SSH connections
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Everything below runs on YOUR remote server, not on GitHub
+            
+            echo "Starting deployment..."
+            
+            # Go to where we will clone the code (we'll set this up in Phase 5)
+            cd /opt/todo-app
+            
+            # Get the latest docker-compose.yml file from GitHub
+            git pull origin main
+            
+            # Download the new Docker image we just built in the previous job
+            docker-compose pull api
+            
+            # Restart only the API container with the new image
+            docker-compose up -d --no-deps --build api
+            
+            echo "Deployment finished!"
